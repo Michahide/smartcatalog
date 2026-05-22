@@ -1,11 +1,16 @@
 <?php
 
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\ProductController;
 use App\Http\Controllers\Api\ChatController;
 use App\Http\Controllers\Api\SearchController;
 use App\Http\Controllers\Api\AnalyticsController;
+
+Route::get('/user', function (Request $request) {
+    return $request->user();
+})->middleware('auth:sanctum');
 
 // Public routes
 Route::post('/auth/login',    [AuthController::class, 'login']);
