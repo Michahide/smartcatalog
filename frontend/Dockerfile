@@ -6,7 +6,7 @@ FROM node:24-alpine AS base
 FROM base AS deps
 
 # Inject token into .npmrc to authenticate to GitHub Packages
-RUN --mount=type=secret,id=npmrc,target=/root/.npmrc 
+# RUN --mount=type=secret,id=npmrc,target=/root/.npmrc 
 
 # Check https://github.com/nodejs/docker-node/tree/b4117f9333da4138b03a546ec926ef50a31506c3#nodealpine to understand why libc6-compat might be needed.
 RUN apk add --no-cache libc6-compat
@@ -15,9 +15,9 @@ WORKDIR /app
 # Install dependencies based on the preferred package manager
 COPY package.json yarn.lock* package-lock.json* pnpm-lock.yaml* pnpm-workspace.yaml* .npmrc* ./
 RUN \
-  --mount=type=secret,id=npmrc,target=/root/.npmrc \
+#   --mount=type=secret,id=npmrc,target=/root/.npmrc \
   if [ -f yarn.lock ]; then yarn --frozen-lockfile; \
-  elif [ -f package-lock.json ]; then npm ci --omit=dev; \
+  elif [ -f package-lock.json ]; then npm ci \
   elif [ -f pnpm-lock.yaml ]; then corepack enable pnpm && pnpm i --frozen-lockfile; \
   else echo "Lockfile not found." && exit 1; \
   fi
