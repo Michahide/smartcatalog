@@ -30,6 +30,10 @@ Route::get('/analytics', [AnalyticsController::class, 'index']);
 // Chat — streaming endpoint (public for demo, add auth middleware in production)
 Route::post('/chat', [ChatController::class, 'stream']);
 
+Route::get('/up', function () {
+    return response()->json(['status' => 'ok']);
+});
+
 // Protected routes
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/auth/logout', [AuthController::class, 'logout']);
