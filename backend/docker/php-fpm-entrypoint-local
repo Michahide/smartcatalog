@@ -1,0 +1,21 @@
+#!/bin/sh
+set -e
+
+echo "▶️ Preparing Laravel app for local development..."
+
+# Fix permissions
+chmod a+x artisan || true
+
+# Prepare storage
+echo "▶️ Preparing storage directories..."
+mkdir -p storage/framework/{cache/data,sessions,views}
+mkdir -p storage/logs
+
+chown -R www-data:www-data storage bootstrap/cache
+chmod -R 775 storage bootstrap/cache storage/logs
+
+# Create storage link (ignore if exists)
+php artisan storage:link || true
+
+echo "▶️ Starting PHP-FPM..."
+exec "$@"
