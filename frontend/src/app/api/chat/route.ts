@@ -11,9 +11,9 @@ const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
 
 // Model used — free tier available, swap to any model on openrouter.ai/models
 // Recommended free models for demo:
-//   openai/gpt-oss-20b:free
-//   google/gemma-4-26b-a4b-it:free
 //   meta-llama/llama-3.2-3b-instruct:free
+//   google/gemma-2-9b-it:free
+//   mistralai/mistral-7b-instruct:free
 const MODEL = process.env.OPENROUTER_MODEL ?? "openai/gpt-oss-20b:free";
 
 const SYSTEM_PROMPT = `Kamu adalah AI asisten untuk SmartCatalog, sebuah aplikasi e-commerce berbasis Web 4.0 yang dibangun dengan Next.js 14, Laravel 11, MySQL, Redis, dan OpenRouter AI API.
@@ -64,8 +64,9 @@ export async function POST(req: NextRequest) {
 	];
 
 	const abort = new AbortController();
-	const timeout = setTimeout(() => abort.abort(), 300_000);
+	const timeout = setTimeout(() => abort.abort(), 30_000);
 
+	console.log(`[chat] → OpenRouter model=${MODEL} messages=${messages.length}`)
 	let upstream: Response;
 	try {
 		upstream = await fetch(`${OPENROUTER_BASE_URL}/chat/completions`, {
@@ -99,6 +100,7 @@ export async function POST(req: NextRequest) {
 		});
 	}
 	clearTimeout(timeout);
+	console.log(`[chat] ← OpenRouter responded status=${upstream.status}`)
 
 	if (!upstream.ok) {
 		const err = await upstream
@@ -124,45 +126,68 @@ export async function POST(req: NextRequest) {
 	const reader = upstream.body!.getReader();
 	const decoder = new TextDecoder();
 
+	let chunkCount = 0
 	const stream = new ReadableStream({
-		async pull(controller) {
-			const { done, value } = await reader.read();
-			if (done) {
-				controller.enqueue(encoder.encode("data: [DONE]\n\n"));
-				controller.close();
-				return;
-			}
+		async start(controller) {
+			const streamTimeout = setTimeout(() => {
+				console.log(`[chat] stream timeout after ${chunkCount} chunks`)
+				controller.enqueue(
+					encoder.encode(`data: ${JSON.stringify({ error: "Stream read timeout" })}\n\ndata: [DONE]\n\n`),
+				)
+				controller.close()
+				reader.cancel()
+			}, 30_000)
 
-			const chunk = decoder.decode(value, { stream: true });
-			const lines = chunk.split("\n").filter((l) => l.startsWith("data: "));
+			try {
+				while (true) {
+					const { done, value } = await reader.read()
+					if (done) break
 
-			for (const line of lines) {
-				const data = line.slice(6).trim();
-				if (data === "[DONE]") continue;
+					if (chunkCount === 0) console.log(`[chat] first chunk received`)
+					chunkCount++
 
-				try {
-					const j = JSON.parse(data);
-					const text = j.choices?.[0]?.delta?.content;
-					if (text) {
-						controller.enqueue(
-							encoder.encode(`data: ${JSON.stringify({ text })}\n\n`),
-						);
+					const chunk = decoder.decode(value, { stream: true })
+					const lines = chunk.split("\n").filter((l) => l.startsWith("data: "))
+
+					for (const line of lines) {
+						const data = line.slice(6).trim()
+						if (data === "[DONE]") {
+							clearTimeout(streamTimeout)
+							console.log(`[chat] stream done after ${chunkCount} chunks`)
+							controller.enqueue(encoder.encode("data: [DONE]\n\n"))
+							controller.close()
+							return
+						}
+						try {
+							const j = JSON.parse(data)
+							const text = j.choices?.[0]?.delta?.content
+							if (text) {
+								controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text })}\n\n`))
+							}
+							if (j.usage) {
+								const tokens = (j.usage.prompt_tokens ?? 0) + (j.usage.completion_tokens ?? 0)
+								controller.enqueue(encoder.encode(`data: ${JSON.stringify({ tokens })}\n\n`))
+							}
+						} catch {
+							// Ignore malformed SSE lines
+						}
 					}
-					// Relay token usage if present
-					if (j.usage) {
-						const tokens =
-							(j.usage.prompt_tokens ?? 0) + (j.usage.completion_tokens ?? 0);
-						controller.enqueue(
-							encoder.encode(`data: ${JSON.stringify({ tokens })}\n\n`),
-						);
-					}
-				} catch {
-					// Ignore malformed SSE lines
 				}
+				clearTimeout(streamTimeout)
+				console.log(`[chat] stream done after ${chunkCount} chunks`)
+				controller.enqueue(encoder.encode("data: [DONE]\n\n"))
+				controller.close()
+			} catch (e) {
+				clearTimeout(streamTimeout)
+				console.log(`[chat] stream error after ${chunkCount} chunks:`, (e as Error).message)
+				controller.enqueue(
+					encoder.encode(`data: ${JSON.stringify({ error: (e as Error).message })}\n\ndata: [DONE]\n\n`),
+				)
+				controller.close()
 			}
 		},
 		cancel() {
-			reader.cancel();
+			reader.cancel()
 		},
 	});
 
