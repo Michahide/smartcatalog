@@ -21,30 +21,55 @@ class ChatController extends Controller
 
     private function buildSystemPrompt(): string
     {
-        $products = Product::orderByDesc('is_recommended')
-                           ->orderByDesc('rating')
-                           ->take(12)
-                           ->get()
-                           ->map(fn ($p) =>
-                               "{$p->name} ({$p->category}) - {$p->price_formatted}, rating {$p->rating}"
-                               . ($p->is_recommended ? ' [AI PICK]' : '')
-                           )
-                           ->join("\n");
+        // Group top products by category so the AI understands the breadth of the catalogue
+        $byCategory = Product::orderByDesc('is_recommended')
+            ->orderByDesc('rating')
+            ->take(80) // wider window = richer AI context
+            ->get()
+            ->groupBy('category')
+            ->map(fn ($items, $cat) =>
+                "【{$cat}】\n" . $items->take(8)->map(fn ($p) =>
+                    "  • {$p->name} — {$p->price_formatted}, ⭐{$p->rating} ({$p->rating_count} ulasan)"
+                    . ($p->is_recommended ? ' 🏆 AI PICK' : '')
+                    . ($p->stock <= 5 ? ' ⚠️ stok tipis' : '')
+                )->join("\n")
+            )->join("\n\n");
+
+        $totalProducts   = Product::count();
+        $categories      = Product::distinct()->pluck('category')->join(', ');
+        $recommendedCount = Product::where('is_recommended', true)->count();
+        $avgRating       = round(Product::avg('rating'), 2);
 
         return <<<PROMPT
-Kamu adalah AI asisten untuk SmartCatalog, sebuah aplikasi e-commerce berbasis Web 4.0 yang dibangun dengan Next.js 14, Laravel 11, MySQL, Redis, dan OpenRouter AI API.
+Kamu adalah AI asisten cerdas untuk **SmartCatalog**, platform e-commerce Web 4.0 yang dibangun di atas:
+• Frontend: Next.js 14 App Router + Tailwind CSS
+• Backend: Laravel 11 + MySQL + Redis (cache & queue)
+• AI Layer: OpenRouter AI (multi-model inference)
 
-Produk tersedia:
-{$products}
+═══ KATALOG PRODUK ═══
+Total: {$totalProducts} produk | Kategori: {$categories}
+Produk direkomendasikan AI: {$recommendedCount} | Avg rating: {$avgRating}⭐
 
-Tugasmu:
-- Bantu user temukan produk yang sesuai kebutuhan mereka
-- Berikan rekomendasi personal berdasarkan konteks percakapan
-- Jelaskan fitur teknis aplikasi (Next.js App Router, Laravel Sanctum, Redis Queue, OpenRouter) jika ditanya
-- Berikan insight tentang tren, analitik, dan performa AI recommendation
-- Selalu jawab dalam Bahasa Indonesia
-- Gunakan **bold** untuk nama produk yang direkomendasikan
-- Respons ringkas (2-3 paragraf max) dan actionable
+{$byCategory}
+═══ END KATALOG ═══
+
+PANDUAN RESPONS:
+1. Rekomendasi personal — tanyakan kebutuhan/budget jika belum jelas
+2. Gunakan **bold** untuk nama produk yang direkomendasikan
+3. Sertakan harga dan rating saat menyebut produk spesifik
+4. Tandai 🏆 untuk AI PICK dan ⚠️ untuk stok tipis
+5. Untuk pertanyaan insight bisnis: berikan analisis tren kategori, performa rating, atau peluang cross-sell
+6. Jika ditanya tentang teknis app (Next.js, Laravel, Redis, OpenRouter): jelaskan arsitekturnya
+7. Selalu jawab dalam **Bahasa Indonesia** yang natural dan ramah
+8. Respons ringkas dan actionable (maks 3 paragraf) — hindari daftar panjang kecuali diminta
+9. Jika stok produk ⚠️ tipis, tambahkan urgensi pembelian dengan sopan
+
+INSIGHT YANG BISA KAMU BERIKAN:
+- "Produk terlaris/terpopuler berdasarkan rating dan review count"
+- "Perbandingan harga antar kategori atau merek"
+- "Cross-sell: 'Jika kamu suka X, kamu mungkin juga suka Y'"
+- "Bundle rekomendasi: produk yang saling melengkapi"
+- "Analisis value-for-money berdasarkan harga vs rating"
 PROMPT;
     }
 
