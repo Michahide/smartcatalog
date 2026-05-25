@@ -86,6 +86,7 @@ export default function ChatWindow({ compact = false, systemContext }: Props) {
           if (data === '[DONE]') break outer
           try {
             const j = JSON.parse(data)
+            if (j.error) throw new Error(j.error)
             if (j.text) {
               assistantContent += j.text
               setMessages(prev => {
