@@ -56,8 +56,8 @@ export default function ChatWindow({ compact = false, systemContext }: Props) {
       const history = [...messages, userMsg]
         .filter(m => m.role === 'user' || m.role === 'assistant')
         .slice(-12)
-
-      const res = await fetch('/api/chat', {
+ 
+      const res = await fetch('http://localhost:8000/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ messages: history, context: systemContext }),
