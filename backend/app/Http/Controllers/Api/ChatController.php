@@ -154,7 +154,7 @@ PROMPT;
                 CURLOPT_TIMEOUT        => 90,    // 90 s total (stream timeout handled below)
                 CURLOPT_RETURNTRANSFER => false,
                 CURLOPT_FOLLOWLOCATION => true,
-                CURLOPT_HTTPVERSION    => CURL_HTTP_VERSION_1_1,
+                // CURLOPT_HTTPVERSION    => CURL_HTTP_VERSION_1_1,
             ]);
 
             // ── Stream-timeout state (mirrors 30 s streamTimeout in Next.js) ──
