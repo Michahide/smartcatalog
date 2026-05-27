@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { Search } from 'lucide-react'
 import { Product } from '@/types'
+import { useProduct, useProducts } from '@/hooks/useProducts'
 
 const MOCK_PRODUCTS: Product[] = [
   { id:1,  name:'iPhone 15 Pro',       slug:'iphone-15-pro',       category:'Electronics', price:18500000, price_formatted:'Rp 18.5jt', rating:4.8, rating_count:1243, emoji:'📱', description:'', stock:15,  tags:['Electronics','Tech'],   is_recommended:true,  created_at:'' },
@@ -40,11 +41,13 @@ const NAME_BOOST: Record<string, number[]> = {
   nike: [5], sepatu: [5],
 }
 
-function scoreProducts(query: string): Scored[] {
+function scoreProducts(query: string, products?: Product[] | null): Scored[] {
   const q = query.toLowerCase().trim()
   const kws = q.split(/\s+/).filter(k => k.length > 1)
 
-  return MOCK_PRODUCTS.map(p => {
+  const productsToScore = products || MOCK_PRODUCTS
+
+  return productsToScore.map(p => {
     let score = 0
     const nl = p.name.toLowerCase()
 
@@ -82,6 +85,7 @@ export default function SearchView() {
   const [query, setQuery] = useState(searchParams.get('q') ?? '')
   const [results, setResults] = useState<Scored[]>([])
   const [loading, setLoading] = useState(false)
+  const { data: products } = useProducts()
 
   const doSearch = useCallback((q: string) => {
     if (!q.trim()) { setResults([]); return }
