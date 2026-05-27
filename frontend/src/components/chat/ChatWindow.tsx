@@ -53,13 +53,16 @@ export default function ChatWindow({ compact = false, systemContext }: Props) {
     let assistantContent = ''
 
     try {
-      const history = [...messages, userMsg]
-        .filter(m => m.role === 'user' || m.role === 'assistant')
-        .slice(-12)
- 
+const history = [...messages, userMsg]
+  .filter(m => m.role === 'user' || m.role === 'assistant')
+  .filter(m => m.content.trim() !== '')   // ← add this line
+  .slice(-12)
+
+      const token = localStorage.getItem('auth_token')
+
       const res = await fetch('http://localhost:8000/api/chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({ messages: history, context: systemContext }),
       })
 
@@ -101,6 +104,7 @@ export default function ChatWindow({ compact = false, systemContext }: Props) {
       }
 
       setLatency(((Date.now() - t0) / 1000).toFixed(1) + 's')
+      console.log('[chat] stream complete, content length:', assistantContent.length)
     } catch (err) {
       setLoading(false)
       setMessages(prev => [...prev, {
